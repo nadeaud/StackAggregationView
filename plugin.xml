@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.views">
+      <category
+            name="Sample Category"
+            id="org.eclipse.cdt.debug.stackaggregation.ui">
+      </category>
+      <view
+            name="Stack View"
+            icon="icons/sample.gif"
+            category="org.eclipse.cdt.debug.stackaggregation.ui"
+            class="org.eclipse.cdt.debug.stackaggregation.ui.views.StackAggregationView"
+            id="org.eclipse.cdt.debug.stackaggregation.ui.views.StackAggregationView">
+      </view>
+   </extension>
+   <extension
+         point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension
+            targetID="org.eclipse.jdt.ui.JavaPerspective">
+         <view
+               ratio="0.5"
+               relative="org.eclipse.ui.views.ProblemView"
+               relationship="right"
+               id="org.eclipse.cdt.debug.stackaggregation.ui.views.StackAggregationView">
+         </view>
+      </perspectiveExtension>
+   </extension>
+   <extension
+         point="org.eclipse.help.contexts">
+      <contexts
+            file="contexts.xml">
+      </contexts>
+   </extension>
+
+</plugin>

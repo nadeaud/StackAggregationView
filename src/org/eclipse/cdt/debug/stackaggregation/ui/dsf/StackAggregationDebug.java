@@ -12,6 +12,7 @@ import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.DsfExecutor;
 import org.eclipse.cdt.dsf.concurrent.DsfRunnable;
 import org.eclipse.cdt.dsf.concurrent.IDsfStatusConstants;
+import org.eclipse.cdt.dsf.concurrent.RequestMonitor;
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
 import org.eclipse.cdt.dsf.debug.service.IProcesses;
 import org.eclipse.cdt.dsf.debug.service.IStack;
@@ -177,6 +178,35 @@ public class StackAggregationDebug
 		
 		return changed;
 	}
+	
+	public void add_thread_to_filter (IDMContext[] ctxs) {
+
+		if (fSession == null && updateDebugContext() == false) {
+			return;			
+		}
+		
+		getExecutor().execute(new DsfRunnable() {
+			@Override
+			public void run() {
+				IProcesses procService = getService(IProcesses.class);
+				ICommandControlService controlService = getService(ICommandControlService.class);
+				
+				if(controlService == null || procService == null) {
+					return;
+				}
+				
+				RequestMonitor rm = new RequestMonitor(getExecutor(), null) {
+					@Override
+					protected void handleCompleted() {
+						
+					}
+				};
+				
+				procService.setProcessSelection(controlService.getContext(), rm, null, ctxs);
+			}
+		});
+	
+	}
 
 	/** Functions to build the tree data structure. */
 	
@@ -217,7 +247,7 @@ public class StackAggregationDebug
 		if(second.isLeaf())
 			return first.addThreads(second);
 		
-		StackNodeDM node = new StackNodeDM(first.getId(), first.getParent());
+		StackNodeDM node = new StackNodeDM(first.getData(), first.getParent());
 		node.addAll(first);
 		node.addAll(second);
 		node.addThreads(first).addThreads(second);
@@ -245,14 +275,14 @@ public class StackAggregationDebug
 	 * @param rm : the datarequestmonitor to be filled with the function names.
 	 */
 	private void getFrameData(IFrameDMContext[] contexts, 
-			DataRequestMonitor<String[]>rm) {
+			DataRequestMonitor<IFrameDMData[]>rm) {
 		IStack service = fServiceTracker.getService(IStack.class);
 
 		CountingRequestMonitor crm = new CountingRequestMonitor(
 				fSession.getExecutor(), rm);
 		crm.setDoneCount(contexts.length);
 		
-		String[] array = new String[contexts.length];
+		IFrameDMData[] array = new IFrameDMData[contexts.length];
 		rm.setData(array);
 		
 		for (int i = 0; i < contexts.length; ++i) {
@@ -267,7 +297,8 @@ public class StackAggregationDebug
 						crm.done();
 						return;
 					}
-					array[index] =  getData().getFunction();
+					IFrameDMData data = getData();
+					array[index] =  getData();
 					crm.done();
 					return;
 				}
@@ -310,8 +341,8 @@ public class StackAggregationDebug
 										crm.done();
 										return;
 									}
-									DataRequestMonitor<String[]> _rm = 
-											new DataRequestMonitor<String[]>(getExecutor(), crm){
+									DataRequestMonitor<IFrameDMData[]> _rm = 
+											new DataRequestMonitor<IFrameDMData[]>(getExecutor(), crm){
 										@Override
 										protected void handleCompleted() {
 											if(! isSuccess()) {
@@ -320,7 +351,7 @@ public class StackAggregationDebug
 											}
 											StackNodeDM root = new StackNodeDM(null, null);
 											StackNodeDM child = root;
-											String[] result = getData();
+											IFrameDMData[] result = getData();
 											String temp = "";
 											for(int i = result.length - 1; i >= 0; --i) {
 												temp += result[i] + ",";

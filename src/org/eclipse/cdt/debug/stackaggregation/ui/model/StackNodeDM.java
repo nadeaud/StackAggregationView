@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import org.eclipse.cdt.dsf.datamodel.IDMContext;
+import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMData;
 import org.eclipse.core.runtime.IAdaptable;
 
 
@@ -17,11 +18,22 @@ public class StackNodeDM
 	private StackNodeDM fParent;
 	private List<ThreadNodeDM> fThreads;
 	private HashMap<String, StackNodeDM> fMap;
+	private IFrameDMData fData;
 	
+	/*
 	public StackNodeDM(String id, StackNodeDM parent) {
 		this.fId = id;
 		fThreads = new ArrayList<>();
 		fMap = new HashMap<>();
+		this.fParent = parent;
+	}
+	*/
+	
+	public StackNodeDM(IFrameDMData data, StackNodeDM parent) {
+		this.fId = data == null ? null : data.getFunction();
+		this.fData = data;
+		this.fThreads = new ArrayList<>();
+		this.fMap = new HashMap<>();
 		this.fParent = parent;
 	}
 
@@ -48,9 +60,19 @@ public class StackNodeDM
 		return (fMap.size() + fThreads.size()) >0;
 	}
 	
-	public StackNodeDM add(String key) {
+	public IFrameDMData getData() {
+		return fData;
+	}
+	
+	/*public StackNodeDM add(String key) {
 		StackNodeDM child = new StackNodeDM(key, this);
 		fMap.put(key, child);
+		return child;
+	}
+	*/
+	public StackNodeDM add(IFrameDMData data) {
+		StackNodeDM child = new StackNodeDM(data, this);
+		fMap.put(data.getFunction(), child);
 		return child;
 	}
 	

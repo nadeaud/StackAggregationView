@@ -1,26 +1,37 @@
 package org.eclipse.cdt.debug.stackaggregation.ui.views;
 
 import java.util.ArrayList;
+import java.util.List;
 
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.part.*;
 import org.eclipse.jface.viewers.*;
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.jface.action.*;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.ui.*;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.cdt.debug.stackaggregation.ui.dsf.StackAggregationDebug;
 import org.eclipse.cdt.debug.stackaggregation.ui.model.StackNodeDM;
 import org.eclipse.cdt.debug.stackaggregation.ui.model.ThreadNodeDM;
 import org.eclipse.cdt.dsf.concurrent.DataRequestMonitor;
 import org.eclipse.cdt.dsf.concurrent.ImmediateDataRequestMonitor;
+import org.eclipse.cdt.dsf.datamodel.IDMContext;
+import org.eclipse.cdt.dsf.debug.service.IStack.IFrameDMData;
+import org.eclipse.cdt.dsf.mi.service.IMIExecutionDMContext;
 import org.eclipse.cdt.dsf.service.DsfSession;
 import org.eclipse.cdt.ui.CDTSharedImages;
 import org.eclipse.core.internal.resources.ContentDescriptionManager;
 import org.eclipse.core.runtime.IAdaptable;
+import org.eclipse.debug.ui.DebugUITools;
+import org.eclipse.debug.ui.IDebugUIConstants;
 
 
 /**
@@ -111,6 +122,7 @@ public class StackAggregationView extends ViewPart {
 						@Override
 						public void run() {
 							fView.viewer.refresh();
+							viewer.expandAll();
 						}
 					});
 				}
@@ -122,16 +134,29 @@ public class StackAggregationView extends ViewPart {
 	class ViewLabelProvider extends LabelProvider {
 
 		public String getText(Object obj) {
+			if (obj instanceof StackNodeDM) {
+				IFrameDMData data = ((StackNodeDM)obj).getData();
+				return data.getFunction() + "()";
+			}
+			else if (obj instanceof ThreadNodeDM && 
+					((ThreadNodeDM)obj).getContext() instanceof IMIExecutionDMContext) {
+				IMIExecutionDMContext ctx = (IMIExecutionDMContext)((ThreadNodeDM)obj).getContext();
+				return "Thread #" + ctx.getThreadId();
+			}
 			return obj.toString();
 		}
 		public Image getImage(Object obj) {
 			if (obj instanceof ThreadNodeDM) {
-				String imagekey = CDTSharedImages.IMG_THREAD_RUNNING_B_PINNED;
+				String imagekey = CDTSharedImages.IMG_THREAD_SUSPENDED_B_PINNED;
 				return CDTSharedImages.getImage(imagekey);
 			}
-			String imageKey = ISharedImages.IMG_OBJ_ELEMENT;
+			else if (obj instanceof StackNodeDM) {
+				String imageKey = IDebugUIConstants.IMG_OBJS_STACKFRAME;
+				return DebugUITools.getImage(imageKey);				
+			}
+			String imageKey = IDebugUIConstants.IMG_OVR_ERROR;
 			return PlatformUI.getWorkbench().getSharedImages().getImage(imageKey);
-		}
+			}
 	}
 
 /**
@@ -147,6 +172,7 @@ public class StackAggregationView extends ViewPart {
 			@Override
 			public void run() {
 				viewer.refresh();
+				viewer.expandAll();
 			}
 		});
 	}
@@ -159,19 +185,57 @@ public class StackAggregationView extends ViewPart {
 		viewer = new TreeViewer(parent, SWT.MULTI | SWT.H_SCROLL | SWT.V_SCROLL);
 		drillDownAdapter = new DrillDownAdapter(viewer);
 		
+		GridLayout layout = new GridLayout(2,false);
+		parent.setLayout(layout);
+		
+		GridData gridData = new GridData();
+		gridData.verticalAlignment = SWT.FILL;
+		gridData.horizontalSpan = 2;
+		gridData.grabExcessHorizontalSpace = true;
+		gridData.grabExcessVerticalSpace = true;
+		gridData.horizontalAlignment = SWT.FILL;
+		
 		fDebugHandler = new StackAggregationDebug(this);
 		fViewContentProvider = new ViewContentProvider(this);
 		viewer.setContentProvider(fViewContentProvider);
 		viewer.setInput(getViewSite());
 		viewer.setLabelProvider(new ViewLabelProvider());
+		viewer.getControl().setLayoutData(gridData);
 
+		/* Add the buttont. */
+		Button b = new Button(parent, SWT.PUSH);
+		b.setText("Set Selection");
+		b.addSelectionListener(new SelectionListener() {
+			
+			@Override
+			public void widgetSelected(SelectionEvent e) {
+				ISelection select = viewer.getSelection();
+				showMessage("Double-click detected on "+ e.toString());
+				if(select instanceof TreeSelection) {
+					TreeSelection treeSelect = (TreeSelection)select;
+					List<IDMContext> ctxs = new ArrayList<IDMContext>();
+					for(Object s : treeSelect.toList()) {
+						if(s instanceof ThreadNodeDM) {
+							IDMContext c = ((ThreadNodeDM)s).getContext();
+							ctxs.add(c);
+						}
+					}
+					fDebugHandler.add_thread_to_filter(ctxs.toArray(new IDMContext[0]));
+				}
+			}
+			
+			@Override
+			public void widgetDefaultSelected(SelectionEvent e) {
+			}
+		});
+		
 		// Create the help context id for the viewer's control
 		PlatformUI.getWorkbench().getHelpSystem().setHelp(viewer.getControl(), "org.eclipse.cdt.debug.stackaggregation.ui.viewer");
 		getSite().setSelectionProvider(viewer);
-		makeActions();
-		hookContextMenu();
-		hookDoubleClickAction();
-		contributeToActionBars();
+		//makeActions();
+		//hookContextMenu();
+		//hookDoubleClickAction();
+		//contributeToActionBars();
 	}
 
 	private void hookContextMenu() {
@@ -239,6 +303,10 @@ public class StackAggregationView extends ViewPart {
 			public void run() {
 				ISelection selection = viewer.getSelection();
 				Object obj = ((IStructuredSelection)selection).getFirstElement();
+				if(obj instanceof ThreadNodeDM) {
+					ThreadNodeDM th = (ThreadNodeDM) obj;
+					//fDebugHandler.add_thread_to_filter(th.getContext());
+				}
 				showMessage("Double-click detected on "+obj.toString());
 			}
 		};
